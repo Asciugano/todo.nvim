@@ -1,10 +1,26 @@
 local M = {}
 local ns = vim.api.nvim_create_namespace("todo_plugin")
 
-local todo_file = "todo.TODO"
+local config = {
+	icons = {
+		pending = "✖",
+		done = "✓",
+	},
+	window = {
+		width = math.floor(vim.o.columns * 0.5),
+		height = math.floor(vim.o.lines * 0.5),
+		border = "rounded",
+		style = "minimal",
+	},
+	keymap = {
+		add = "a",
+		quit = "q",
+		jump = "<space>",
+		use = "<CR>",
+	},
+}
 
-local ICON_PENDING = "✖"
-local ICON_DONE = "✓"
+local todo_file = "todo.TODO"
 
 local function ensure_todo_file()
 	local cwd = vim.fn.getcwd()
@@ -38,8 +54,8 @@ local function read_todos(path)
 	local lines = vim.fn.readfile(path)
 
 	for i, line in ipairs(lines) do
-		line = line:gsub("%[ %]", ICON_PENDING)
-		line = line:gsub("%[x%]", ICON_DONE)
+		line = line:gsub("%[ %]", config.icons.pending)
+		line = line:gsub("%[x%]", config.icons.done)
 		lines[i] = line
 	end
 
@@ -96,13 +112,13 @@ local function highlight_todos(buf)
 	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 
 	for i, line in ipairs(lines) do
-		if line:find(ICON_PENDING, 1, true) then
+		if line:find(config.icons.pending, 1, true) then
 			vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
 				end_line = i - 1,
 				end_col = #line,
 				hl_group = "TodoPending",
 			})
-		elseif line:find(ICON_DONE, 1, true) then
+		elseif line:find(config.icons.done, 1, true) then
 			vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, {
 				end_line = i - 1,
 				end_col = #line,
@@ -161,12 +177,12 @@ local function create_window(lines)
 
 	local opts = {
 		relative = "editor",
-		width = width,
-		height = height,
+		width = config.window.width,
+		height = config.window.height,
 		row = row,
 		col = col,
-		style = "minimal",
-		border = "rounded",
+		style = config.window.style,
+		border = config.window.border,
 	}
 
 	local win = vim.api.nvim_open_win(buf, true, opts)
@@ -182,10 +198,10 @@ local function toggle_todo(buf)
 		return
 	end
 
-	if line:match(ICON_PENDING) then
-		line = line:gsub(ICON_PENDING, ICON_DONE)
-	elseif line:match(ICON_DONE) then
-		line = line:gsub(ICON_DONE, ICON_PENDING)
+	if line:match(config.icons.pending) then
+		line = line:gsub(config.icons.pending, config.icons.done)
+	elseif line:match(config.icons.done) then
+		line = line:gsub(config.icons.done, config.icons.pending)
 	end
 
 	vim.api.nvim_buf_set_lines(buf, row, row + 1, false, { line })
@@ -204,7 +220,7 @@ local function add_todo_from_code()
 	local path = ensure_todo_file()
 
 	local lines = vim.fn.readfile(path)
-	table.insert(lines, ICON_PENDING .. " " .. text)
+	table.insert(lines, config.icons.pending .. " " .. text)
 
 	vim.fn.writefile(lines, path)
 
@@ -217,7 +233,7 @@ local function add_todo(buf)
 			return
 		end
 
-		local line = ICON_PENDING .. " " .. input
+		local line = config.icons.pending .. " " .. input
 		local line_count = vim.api.nvim_buf_line_count(buf)
 
 		vim.api.nvim_buf_set_lines(buf, line_count, line_count, false, { line })
@@ -227,8 +243,8 @@ end
 local function normalize_for_save(lines)
 	local result = {}
 	for _, line in ipairs(lines) do
-		line = line:gsub(ICON_PENDING, "[ ]")
-		line = line:gsub(ICON_DONE, "[x]")
+		line = line:gsub(config.icons.pending, "[ ]")
+		line = line:gsub(config.icons.done, "[x]")
 		table.insert(result, line)
 	end
 
@@ -249,24 +265,25 @@ local function attach_autosave(buf, path)
 end
 
 local function attach_mappings(buf)
-	vim.keymap.set("n", "<CR>", function()
+	vim.keymap.set("n", config.keymap.use, function()
 		toggle_todo(buf)
 	end, { buffer = buf })
 
-	vim.keymap.set("n", "a", function()
+	vim.keymap.set("n", config.keymap.add, function()
 		add_todo(buf)
 	end, { buffer = buf, noremap = true, silent = true })
 
-	vim.keymap.set("n", "q", function()
+	vim.keymap.set("n", config.keymap.quit, function()
 		vim.api.nvim_win_close(0, true)
 	end, { buffer = buf })
 
-	vim.keymap.set("n", "<Space>", function()
+	vim.keymap.set("n", config.keymap.jump, function()
 		open_todo_location(buf)
 	end, { buffer = buf })
 end
 
-function M.setup()
+function M.setup(opts)
+	config = vim.tbl_deep_extend("force", config, opts or {})
 	vim.api.nvim_create_user_command("Todo", function()
 		local path = ensure_todo_file()
 		add_to_gitignore()

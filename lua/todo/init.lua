@@ -1,7 +1,7 @@
 local M = {}
 
-function M.setup()
-	require("todo.core").setup()
+function M.setup(opts)
+	require("todo.core").setup(opts or {})
 end
 
 return M
